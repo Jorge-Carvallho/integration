@@ -1,0 +1,30 @@
+{
+  "name": "integration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "commit": "node scripts/commit.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@types/node": "^26.1.2",
+    "chalk": "^5.4.1",
+    "eslint": "^9.22.0",
+    "husky": "^9.1.7",
+    "inquirer": "^12.4.2",
+    "lint-staged": "^15.5.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  }
+}

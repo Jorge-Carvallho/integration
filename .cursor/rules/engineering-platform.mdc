@@ -1,0 +1,106 @@
+---
+description: Visão da arquitetura — este repo é a Engineering Platform, não um projeto de negócio
+alwaysApply: true
+---
+
+# Engineering Platform
+
+## Objetivo
+
+Este projeto NÃO é um sistema de negócio.
+
+Este projeto é uma plataforma de engenharia (Engineering Platform) responsável por padronizar todos os projetos da empresa.
+
+Ela será utilizada pelo time de DevOps para provisionar novos projetos automaticamente.
+
+---
+
+## Visão
+
+Sempre que um novo projeto for criado, esta plataforma será responsável por:
+
+- Criar o repositório GitHub
+- Criar o Board do Trello
+- Criar o Projeto no Jira
+- Criar Issues
+- Criar Backlog
+- Criar Branch Protection
+- Configurar GitHub Actions
+- Configurar Husky
+- Configurar Commitlint
+- Configurar lint-staged
+- Configurar TypeScript
+- Configurar Docker
+- Configurar Templates
+- Configurar Secrets
+- Configurar Ambientes
+- Configurar Releases
+- Gerar documentação
+- Aplicar padrões da empresa
+
+---
+
+## Arquitetura
+
+Esta aplicação será executada como um serviço central.
+
+Ela não pertence a nenhum projeto específico.
+
+Todos os projetos da empresa serão clientes desta plataforma.
+
+---
+
+## Responsabilidades
+
+A plataforma deve possuir módulos independentes.
+
+Exemplo:
+
+- Authentication
+- Organizations
+- Projects
+- GitHub
+- Jira
+- Trello
+- CI/CD
+- Templates
+- Pipelines
+- Backlog Generator
+- Documentation Generator
+- Notifications
+- Dashboard
+- Settings
+
+---
+
+## Objetivo do desenvolvimento
+
+Ao implementar uma funcionalidade, considere sempre que ela deverá funcionar para qualquer projeto da empresa.
+
+Nunca desenvolver pensando em um único projeto.
+
+Sempre desenvolver pensando em uma plataforma reutilizável.
+
+---
+
+## Arquitetura esperada
+
+Engineering Platform
+
+├── API
+├── Dashboard Web
+├── Workers
+├── CLI
+├── GitHub Integration
+├── Jira Integration
+├── Trello Integration
+├── Template Engine
+├── Pipeline Engine
+├── Provisioning Engine
+├── Backlog Generator
+├── Documentation Generator
+└── Monitoring
+
+Esta arquitetura deverá crescer de forma modular.
+
+Todas as funcionalidades deverão ser desacopladas e reutilizáveis.

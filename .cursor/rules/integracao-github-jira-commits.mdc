@@ -1,0 +1,36 @@
+---
+description: Regras de negócio e especificação — integração GitHub/Jira e pipeline de commits
+alwaysApply: true
+---
+
+# Integração GitHub + Jira (módulo da plataforma)
+
+## Contexto
+
+- Este repo **é a Engineering Platform** — ver regra `engineering-platform.mdc`.
+- Husky, commitlint, GitHub Actions etc. são **capabilities reutilizáveis** para provisionar qualquer projeto da empresa.
+- PDFs na raiz = spec do chefe. **PDF prevalece** em caso de dúvida.
+
+## Fonte da verdade
+
+1. `integracao-github-jira-validacao-de-commits.pdf`
+2. `pnpm-commit-script-interativo-lint-typecheck.pdf`
+
+## Convenções obrigatórias
+
+- **Jira key**: `^[A-Z]{2,10}-[0-9]+` (ex.: `INT-001`)
+- **Branch**: `tipo/CHAVE-descricao-curta`
+- **Commit**: `tipo(escopo): CHAVE descricao` via `pnpm commit`
+- **Smart Commits** (opcional): `MBX-123 #comment ... #time 1h #close`
+
+## Validação em 3 camadas
+
+1. **Local**: Husky (pre-commit ? lint-staged; commit-msg ? commitlint + jira key)
+2. **CI**: GitHub Actions no PR contra `main`
+3. **Branch protection**: check obrigatório antes do merge
+
+## Princípios
+
+- Implementar pensando em **qualquer projeto cliente**, não só este repo.
+- Mensagens de erro claras: qual commit falhou e formato esperado.
+- Exceções documentadas para dependabot, merges automáticos, hotfix (`--no-verify` só em emergência).

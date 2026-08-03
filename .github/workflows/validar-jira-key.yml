@@ -1,0 +1,28 @@
+name: Validar Jira Key
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validar-jira-key:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verificar mensagens de commit
+        run: |
+          PATTERN="^[A-Z]{2,10}-[0-9]+"
+          FALHOU=0
+          for msg in $(git log --pretty=format:%s origin/main..HEAD); do
+            if ! echo "$msg" | grep -qE "$PATTERN"; then
+              echo "Commit sem jira key: $msg"
+              FALHOU=1
+            fi
+          done
+          if [ "$FALHOU" -eq 1 ]; then
+            echo "Um ou mais commits nao referenciam uma issue do Jira."
+            exit 1
+          fi
