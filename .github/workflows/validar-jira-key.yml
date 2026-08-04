@@ -1,28 +1,72 @@
+# ============================================================
+# CONFIGURACAO PADRAO DA EMPRESA — equipe DevOps
+# Nao alterar sem alinhamento.
+#
+# Referencia: integracao-github-jira-validacao-de-commits.pdf
+# Camada 2: validacao no CI durante o Pull Request
+# ============================================================
 name: Validar Jira Key
 
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   validar-jira-key:
+    name: Validar commits e PR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Verificar mensagens de commit
+      - name: Validar titulo do Pull Request
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          PATTERN="^[A-Z]{2,10}-[0-9]+"
-          FALHOU=0
-          for msg in $(git log --pretty=format:%s origin/main..HEAD); do
-            if ! echo "$msg" | grep -qE "$PATTERN"; then
-              echo "Commit sem jira key: $msg"
-              FALHOU=1
-            fi
-          done
-          if [ "$FALHOU" -eq 1 ]; then
-            echo "Um ou mais commits nao referenciam uma issue do Jira."
+          PATTERN="[A-Z]{2,10}-[0-9]+"
+          echo "Titulo do PR: $PR_TITLE"
+          if ! echo "$PR_TITLE" | grep -qE "$PATTERN"; then
+            echo ""
+            echo "Pull Request rejeitado: o titulo precisa conter uma chave valida do Jira."
+            echo "Formato esperado: PREFIXO-NUMERO (ex: INT-009, MBX-123)"
+            echo "Exemplo valido: feat(ci): INT-009 criar github actions"
             exit 1
           fi
+          echo "Titulo do PR possui chave do Jira valida."
+
+      - name: Validar mensagens de commit do PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          PATTERN="[A-Z]{2,10}-[0-9]+"
+          FALHOU=0
+
+          echo "Comparando commits: $BASE_SHA .. $HEAD_SHA"
+          echo ""
+
+          while IFS= read -r msg; do
+            [ -z "$msg" ] && continue
+            if ! echo "$msg" | grep -qE "$PATTERN"; then
+              echo "Commit sem jira key valida: $msg"
+              echo "  Formato esperado: PREFIXO-NUMERO (ex: INT-009, MBX-123)"
+              echo "  Exemplo valido: feat(ci): INT-009 criar github actions"
+              echo ""
+              FALHOU=1
+            else
+              echo "OK: $msg"
+            fi
+          done < <(git log --pretty=format:%s "${BASE_SHA}..${HEAD_SHA}")
+
+          if [ "$FALHOU" -eq 1 ]; then
+            echo ""
+            echo "Um ou mais commits do Pull Request nao referenciam uma issue do Jira."
+            echo "Corrija as mensagens (amend/rebase) ou crie um novo commit com a chave."
+            exit 1
+          fi
+
+          echo ""
+          echo "Todos os commits do Pull Request possuem chave do Jira valida."

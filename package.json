@@ -7,11 +7,15 @@
     "commit": "node scripts/commit.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "format": "prettier --write .",
     "prepare": "husky"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs}": [
       "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
   },
