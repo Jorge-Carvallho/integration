@@ -12,8 +12,83 @@ import chalk from "chalk";
 
 const TIPOS = ["feat", "fix", "refactor", "docs", "test", "chore", "perf", "build", "ci"];
 
+/** Limite do header (commitlint header-max-length). */
+const HEADER_MAX_LENGTH = 100;
+
+/** Limite por linha do corpo (commitlint body-max-line-length). */
+const BODY_MAX_LINE_LENGTH = 100;
+
 /** Extrai a chave da branch (ex.: feature/SCRUM-1-descricao → SCRUM-1) */
 const JIRA_KEY_NA_BRANCH = /[A-Z]{2,10}-[0-9]+/i;
+
+/**
+ * Monta a linha de titulo do commit (header).
+ * @param {string} tipo
+ * @param {string} escopo
+ * @param {string} jira
+ * @param {string} descricao
+ * @param {boolean} [breaking]
+ * @returns {string}
+ */
+function montarHeader(tipo, escopo, jira, descricao, breaking = false) {
+  const prefixo = breaking ? `${tipo}!` : tipo;
+  return `${prefixo}(${escopo.trim()}): ${jira} ${descricao.trim()}`;
+}
+
+/**
+ * Quebra o texto do corpo em linhas de no maximo maxLen caracteres.
+ * @param {string} texto
+ * @param {number} [maxLen]
+ * @returns {string}
+ */
+function quebrarLinhasDoCorpo(texto, maxLen = BODY_MAX_LINE_LENGTH) {
+  const paragrafos = texto.trim().split(/\n+/);
+  /** @type {string[]} */
+  const linhas = [];
+
+  for (const paragrafo of paragrafos) {
+    const palavras = paragrafo.trim().split(/\s+/).filter(Boolean);
+    if (palavras.length === 0) {
+      continue;
+    }
+
+    let linhaAtual = "";
+    for (const palavra of palavras) {
+      if (!linhaAtual) {
+        // Palavra isolada maior que o limite: corta mesmo assim
+        if (palavra.length > maxLen) {
+          for (let i = 0; i < palavra.length; i += maxLen) {
+            linhas.push(palavra.slice(i, i + maxLen));
+          }
+          linhaAtual = "";
+        } else {
+          linhaAtual = palavra;
+        }
+        continue;
+      }
+
+      if (`${linhaAtual} ${palavra}`.length <= maxLen) {
+        linhaAtual = `${linhaAtual} ${palavra}`;
+      } else {
+        linhas.push(linhaAtual);
+        if (palavra.length > maxLen) {
+          for (let i = 0; i < palavra.length; i += maxLen) {
+            linhas.push(palavra.slice(i, i + maxLen));
+          }
+          linhaAtual = "";
+        } else {
+          linhaAtual = palavra;
+        }
+      }
+    }
+
+    if (linhaAtual) {
+      linhas.push(linhaAtual);
+    }
+  }
+
+  return linhas.join("\n");
+}
 
 /**
  * @returns {string}
@@ -33,6 +108,7 @@ function extrairJiraKeyDaBranch(branch) {
 
 /**
  * @param {string} branch
+ * @returns {never}
  */
 function abortarSemJiraNaBranch(branch) {
   console.log(chalk.red("\nCommit cancelado."));
@@ -55,6 +131,9 @@ function temArquivosEmStaging() {
   return saida.length > 0;
 }
 
+/**
+ * @returns {never}
+ */
 function abortarSemStaging() {
   console.log(chalk.red("\nNenhum arquivo foi adicionado ao commit.\n"));
   console.log("Execute:");
@@ -77,6 +156,27 @@ function run(comando, descricao) {
   execSync(comando, { stdio: "inherit" });
 }
 
+function temUpstream() {
+  try {
+    execFileSync("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function push() {
+  console.log(chalk.blue("\n> Enviando commit para o remoto (git push)..."));
+  if (temUpstream()) {
+    execFileSync("git", ["push"], { stdio: "inherit" });
+  } else {
+    execFileSync("git", ["push", "-u", "origin", "HEAD"], { stdio: "inherit" });
+  }
+  console.log(chalk.green("\nPush concluido."));
+}
+
 async function main() {
   if (!temArquivosEmStaging()) {
     abortarSemStaging();
@@ -92,7 +192,7 @@ async function main() {
   console.log(chalk.green(`\nChave detectada na branch: ${jira}`));
   console.log(chalk.gray(`Branch: ${branch}`));
 
-  const respostas = await inquirer.prompt([
+  const { tipo, escopo } = await inquirer.prompt([
     { type: "list", name: "tipo", message: "Tipo da alteracao:", choices: TIPOS },
     {
       type: "input",
@@ -100,17 +200,45 @@ async function main() {
       message: "Escopo (ex: checkout, auth):",
       validate: (v) => v.trim().length > 0 || "Informe o escopo da mudanca",
     },
+  ]);
+
+  const respostas = await inquirer.prompt([
     {
       type: "input",
       name: "descricao",
-      message: "Descricao curta da mudanca:",
-      validate: (v) => v.trim().length > 0 || "Informe a descricao da mudanca",
+      message: "Descricao curta da mudanca (titulo):",
+      validate: (v) => {
+        const desc = v.trim();
+        if (!desc) {
+          return "Informe a descricao da mudanca";
+        }
+        // Pior caso (breaking) para nao estourar depois do confirm
+        const header = montarHeader(tipo, escopo, jira, desc, true);
+        if (header.length > HEADER_MAX_LENGTH) {
+          return [
+            `Muitos caracteres: o titulo ficaria com ${header.length} (maximo ${HEADER_MAX_LENGTH}).`,
+            "Encurte a descricao sem sair deste passo.",
+          ].join(" ");
+        }
+        return true;
+      },
+    },
+    {
+      type: "input",
+      name: "detalhes",
+      message: "Detalhes (opcional, Enter para pular):",
     },
     {
       type: "confirm",
       name: "breaking",
       message: "Essa mudanca quebra compatibilidade?",
       default: false,
+    },
+    {
+      type: "confirm",
+      name: "push",
+      message: "Fazer push apos o commit?",
+      default: true,
     },
   ]);
 
@@ -127,20 +255,44 @@ async function main() {
     process.exit(1);
   }
 
-  const prefixo = respostas.breaking ? `${respostas.tipo}!` : respostas.tipo;
-  const mensagem = `${prefixo}(${respostas.escopo.trim()}): ${jira} ${respostas.descricao.trim()}`;
+  const header = montarHeader(tipo, escopo, jira, respostas.descricao, respostas.breaking);
+  const detalhesBrutos = respostas.detalhes.trim();
+  const detalhes = detalhesBrutos ? quebrarLinhasDoCorpo(detalhesBrutos) : "";
 
-  console.log(chalk.yellow(`\nMensagem gerada: ${mensagem}`));
+  console.log(chalk.yellow(`\nMensagem gerada:\n${header}`));
+  if (detalhes) {
+    console.log(chalk.yellow(`\n${detalhes}`));
+  }
+
+  const commitArgs = ["commit", "-m", header];
+  if (detalhes) {
+    commitArgs.push("-m", detalhes);
+  }
 
   try {
-    execFileSync("git", ["commit", "-m", mensagem], { stdio: "inherit" });
+    execFileSync("git", commitArgs, { stdio: "inherit" });
   } catch {
     console.log(chalk.red("\nCommit cancelado: o Git nao conseguiu criar o commit."));
     console.log(chalk.yellow("Verifique se ainda existem arquivos em staging e tente de novo."));
     process.exit(1);
   }
 
-  console.log(chalk.green(`\nCommit criado: ${mensagem}`));
+  console.log(chalk.green(`\nCommit criado: ${header}`));
+
+  if (respostas.push) {
+    try {
+      push();
+    } catch {
+      console.log(
+        chalk.red(
+          "\nCommit criado, mas o push falhou. Corrija o erro acima e rode 'git push' manualmente.",
+        ),
+      );
+      process.exit(1);
+    }
+  } else {
+    console.log(chalk.yellow("\nPush pulado. Quando quiser enviar: git push"));
+  }
 }
 
 main().catch((erro) => {
