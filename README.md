@@ -124,7 +124,7 @@ O script:
 
 1. Confere se há arquivos em staging.
 2. **Detecta a chave do Jira pela branch** (não digita na mão).
-3. Pergunta: tipo, escopo, descrição, breaking change.
+3. Pergunta: tipo, escopo, descrição, detalhes (opcional), breaking change.
 4. Roda lint-staged + typecheck.
 5. Cria o commit no formato:
 
@@ -137,6 +137,16 @@ Exemplo:
 ```text
 docs(docs): SCRUM-3 documentar fluxo tecnico para onboarding
 ```
+
+Se marcar **breaking change = Yes**, o script pede o motivo e grava no corpo:
+
+```text
+fix(api)!: SCRUM-3 remover login legado
+
+BREAKING CHANGE: endpoint /v1/login removido; use /v2/auth
+```
+
+Na duvida, responda **No**. Isso nao quebra a automacao — so documenta a incompatibilidade no historico.
 
 ### O que roda por baixo
 

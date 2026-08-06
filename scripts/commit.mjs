@@ -81,8 +81,10 @@ function validarEscopo(valor) {
  * @returns {string}
  */
 function montarHeader(tipo, escopo, jira, descricao, breaking = false) {
-  const prefixo = breaking ? `${tipo}!` : tipo;
-  return `${prefixo}(${escopo.trim()}): ${jira} ${descricao.trim()}`;
+  const escopoLimpo = escopo.trim();
+  const base = `${tipo}(${escopoLimpo})`;
+  const prefixo = breaking ? `${base}!` : base;
+  return `${prefixo}: ${jira} ${descricao.trim()}`;
 }
 
 /**
@@ -395,31 +397,107 @@ async function main() {
   let detalhesInformados = "";
   if (comDetalhes) {
     garantirEditorParaDetalhes();
-    console.log(
-      chalk.gray("\nAbrindo editor para os detalhes. Escreva a vontade (varias linhas)."),
-    );
-    console.log(
-      chalk.gray("Salve e feche o editor para continuar (nano: Ctrl+O, Enter, Ctrl+X).\n"),
-    );
-    const { detalhes } = await inquirer.prompt([
-      {
-        type: "editor",
-        name: "detalhes",
-        message: "Detalhes do commit",
-        default: "",
-        validate: validarDetalhes,
-      },
-    ]);
-    detalhesInformados = (detalhes ?? "").trim();
+    let editarNovamente = true;
+
+    while (editarNovamente) {
+      console.log(
+        chalk.gray("\nAbrindo editor para os detalhes. Escreva a vontade (varias linhas)."),
+      );
+      console.log(
+        chalk.gray("Salve e feche o editor para continuar (nano: Ctrl+O, Enter, Ctrl+X).\n"),
+      );
+
+      const { detalhes } = await inquirer.prompt([
+        {
+          type: "editor",
+          name: "detalhes",
+          message: "Detalhes do commit",
+          // Reabre com o texto atual, para nao perder o que ja digitou
+          default: detalhesInformados,
+          validate: validarDetalhes,
+        },
+      ]);
+      detalhesInformados = (detalhes ?? "").trim();
+
+      if (detalhesInformados) {
+        console.log(chalk.cyan("\nDetalhes capturados:"));
+        console.log(chalk.gray(detalhesInformados));
+        console.log("");
+      } else {
+        console.log(chalk.yellow("\nNenhum detalhe informado (editor vazio).\n"));
+      }
+
+      const { acaoDetalhes } = await inquirer.prompt([
+        {
+          type: "list",
+          name: "acaoDetalhes",
+          message: "Os detalhes acima estao corretos?",
+          choices: [
+            { name: "Sim, pode seguir o commit", value: "continuar" },
+            { name: "Nao, quero alterar o texto (abrir o editor de novo)", value: "editar" },
+            { name: "Apagar os detalhes e seguir sem eles", value: "remover" },
+          ],
+        },
+      ]);
+
+      if (acaoDetalhes === "editar") {
+        editarNovamente = true;
+        continue;
+      }
+
+      if (acaoDetalhes === "remover") {
+        detalhesInformados = "";
+      }
+
+      editarNovamente = false;
+    }
   }
 
-  const respostas = await inquirer.prompt([
+  console.log("");
+  console.log(
+    chalk.gray(
+      "Breaking change = muda algo que ja existia e obriga outros a ajustar (ex.: removeu endpoint, mudou contrato da API).",
+    ),
+  );
+  console.log(
+    chalk.gray("Na duvida, responda No. Isso nao quebra a automacao — so marca o commit.\n"),
+  );
+
+  const { breaking } = await inquirer.prompt([
     {
       type: "confirm",
       name: "breaking",
-      message: "Essa mudanca quebra compatibilidade?",
+      message: "Essa mudanca QUEBRA compatibilidade com o que ja existe?",
       default: false,
     },
+  ]);
+
+  /** @type {string} */
+  let motivoBreaking = "";
+  if (breaking) {
+    const { motivo } = await inquirer.prompt([
+      {
+        type: "input",
+        name: "motivo",
+        message: "Descreva o que quebra (ex.: endpoint /v1/login removido; use /v2/auth):",
+        validate: (v) => {
+          const texto = (v ?? "").trim();
+          if (!texto) {
+            return "Informe o motivo da quebra de compatibilidade";
+          }
+          if (texto.length < 10) {
+            return "Seja um pouco mais especifico (minimo ~10 caracteres)";
+          }
+          return true;
+        },
+        /** @param {string} v */
+        filter: (v) => (v ?? "").trim(),
+      },
+    ]);
+    motivoBreaking = motivo;
+  }
+
+  const { push: fazerPush } = await inquirer.prompt([
     {
       type: "confirm",
       name: "push",
@@ -450,17 +528,25 @@ async function main() {
     process.exit(1);
   }
 
-  const header = montarHeader(tipo, escopo, jira, descricao, respostas.breaking);
-  const detalhes = detalhesInformados ? quebrarLinhasDoCorpo(detalhesInformados) : "";
+  const header = montarHeader(tipo, escopo, jira, descricao, breaking);
+  /** @type {string[]} */
+  const partesCorpo = [];
+  if (detalhesInformados) {
+    partesCorpo.push(quebrarLinhasDoCorpo(detalhesInformados));
+  }
+  if (motivoBreaking) {
+    partesCorpo.push(quebrarLinhasDoCorpo(`BREAKING CHANGE: ${motivoBreaking}`));
+  }
+  const corpo = partesCorpo.join("\n\n");
 
   console.log(chalk.yellow(`\nMensagem gerada:\n${header}`));
-  if (detalhes) {
-    console.log(chalk.yellow(`\n${detalhes}`));
+  if (corpo) {
+    console.log(chalk.yellow(`\n${corpo}`));
   }
 
   const commitArgs = ["commit", "-m", header];
-  if (detalhes) {
-    commitArgs.push("-m", detalhes);
+  if (corpo) {
+    commitArgs.push("-m", corpo);
   }
 
   try {
@@ -473,7 +559,7 @@ async function main() {
 
   console.log(chalk.green(`\nCommit criado: ${header}`));
 
-  if (respostas.push) {
+  if (fazerPush) {
     try {
       push();
       mostrarLinksAposPush(jira, branch);
