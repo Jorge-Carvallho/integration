@@ -7,8 +7,13 @@
  * Referencia: pnpm-commit-script-interativo-lint-typecheck.pdf
  */
 import { execFileSync, execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import inquirer from "inquirer";
 import chalk from "chalk";
+
+/** Branch principal usada no link de abertura de PR (fallback: main). */
+const BRANCH_PRINCIPAL_PADRAO = "main";
 
 const TIPOS = ["feat", "fix", "refactor", "docs", "test", "chore", "perf", "build", "ci"];
 
@@ -192,6 +197,109 @@ function temUpstream() {
   }
 }
 
+/**
+ * URL base do Jira definida pelo DevOps ao provisionar o projeto.
+ * @returns {string | null}
+ */
+function obterJiraBaseUrl() {
+  try {
+    const config = JSON.parse(readFileSync(join(process.cwd(), "config", "jira.json"), "utf8"));
+    const base = config.baseUrl?.trim().replace(/\/+$/, "");
+    return base || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @returns {string}
+ */
+function obterRemoteOrigin() {
+  return execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" }).trim();
+}
+
+/**
+ * @param {string} remote
+ * @returns {string | null}
+ */
+function parseGithubRepoWebUrl(remote) {
+  const ssh = remote.match(/^git@github\.com:(.+?)(?:\.git)?$/i);
+  if (ssh) {
+    return `https://github.com/${ssh[1].replace(/\.git$/i, "")}`;
+  }
+
+  const https = remote.match(/^https?:\/\/github\.com\/(.+?)(?:\.git)?$/i);
+  if (https) {
+    return `https://github.com/${https[1].replace(/\.git$/i, "")}`;
+  }
+
+  return null;
+}
+
+/**
+ * @returns {string}
+ */
+function obterBranchPrincipal() {
+  try {
+    const ref = execFileSync("git", ["symbolic-ref", "refs/remotes/origin/HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const segmentos = ref.split("/");
+    return segmentos[segmentos.length - 1] || BRANCH_PRINCIPAL_PADRAO;
+  } catch {
+    return BRANCH_PRINCIPAL_PADRAO;
+  }
+}
+
+/**
+ * @param {string} jira
+ * @returns {string | null}
+ */
+function obterUrlIssueJira(jira) {
+  const base = obterJiraBaseUrl();
+  if (!base) {
+    return null;
+  }
+  return `${base}/browse/${jira}`;
+}
+
+/**
+ * @param {string} jira
+ * @param {string} branch
+ */
+function mostrarLinksAposPush(jira, branch) {
+  console.log(chalk.cyan("\nLinks uteis (clique para abrir no navegador):"));
+
+  const urlIssue = obterUrlIssueJira(jira);
+  console.log(chalk.gray("\nIssue no Jira:"));
+  if (urlIssue) {
+    console.log(urlIssue);
+  } else {
+    console.log(chalk.yellow(`${jira} (sem link — configure config/jira.json)`));
+    console.log(chalk.gray('  Exemplo: { "baseUrl": "https://sua-empresa.atlassian.net" }'));
+  }
+
+  try {
+    const repo = parseGithubRepoWebUrl(obterRemoteOrigin());
+    if (!repo) {
+      console.log(chalk.gray("\nBranch no GitHub: remote origin nao e GitHub — link omitido."));
+      return;
+    }
+
+    const branchCodificada = encodeURIComponent(branch);
+    const base = obterBranchPrincipal();
+    const baseCodificada = encodeURIComponent(base);
+
+    console.log(chalk.gray("\nBranch no GitHub:"));
+    console.log(`${repo}/tree/${branchCodificada}`);
+
+    console.log(chalk.gray("\nAbrir Pull Request:"));
+    console.log(`${repo}/compare/${baseCodificada}...${branchCodificada}?expand=1`);
+  } catch {
+    console.log(chalk.gray("\nBranch no GitHub: nao foi possivel montar o link."));
+  }
+}
+
 function push() {
   console.log(chalk.blue("\n> Enviando commit para o remoto (git push)..."));
   if (temUpstream()) {
@@ -309,6 +417,7 @@ async function main() {
   if (respostas.push) {
     try {
       push();
+      mostrarLinksAposPush(jira, branch);
     } catch {
       console.log(
         chalk.red(
