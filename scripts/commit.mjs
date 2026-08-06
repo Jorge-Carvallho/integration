@@ -296,6 +296,12 @@ async function main() {
 }
 
 main().catch((erro) => {
+  // Ctrl+C durante o questionario nao e erro: apenas encerra o fluxo
+  if (erro instanceof Error && erro.name === "ExitPromptError") {
+    console.log(chalk.yellow("\nCommit cancelado pelo usuario. Nenhum commit foi criado."));
+    process.exit(1);
+  }
+
   console.log(chalk.red("\nCommit cancelado por um erro inesperado."));
   if (erro instanceof Error && erro.message) {
     console.log(chalk.red(erro.message));
