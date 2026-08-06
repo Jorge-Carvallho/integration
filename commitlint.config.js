@@ -9,6 +9,7 @@ export default {
   extends: ["@commitlint/config-conventional"],
   rules: {
     "header-max-length": [2, "always", 100],
+    "scope-max-length": [2, "always", 30],
     "subject-case": [0],
     "jira-key-presente": [2, "always"],
   },
