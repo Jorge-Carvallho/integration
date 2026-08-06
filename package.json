@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "commit": "node scripts/commit.mjs",
+    "proteger-branch": "node scripts/proteger-branch-principal.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
