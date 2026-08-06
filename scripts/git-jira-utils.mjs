@@ -14,18 +14,29 @@ export function extrairJiraKeyDaBranch(branch) {
 }
 
 /**
+ * Remove acentos para nomes/titulos mais seguros no GitHub/CI/DevContainer.
+ * @param {string} texto
+ * @returns {string}
+ */
+export function removerAcentos(texto) {
+  return texto.normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+/**
  * Titulo de PR no padrao do CI: CHAVE descricao legivel.
  * GitHub sugere "Scrum 3 ..." a partir da branch — este formato corrige para SCRUM-3.
+ * Sempre usa a chave em MAIUSCULAS com hifen (ex.: SCRUM-3), que e o que o workflow exige.
  *
  * @param {string} jira
  * @param {string} branch
  * @returns {string}
  */
 export function montarTituloPrSugerido(jira, branch) {
+  const chave = jira.toUpperCase();
   const semTipo = branch.replace(PREFIXO_TIPO_BRANCH, "");
-  const prefixoJira = new RegExp(`^${jira.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-?`, "i");
+  const prefixoJira = new RegExp(`^${chave.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-?`, "i");
   let descricao = semTipo.replace(prefixoJira, "").replace(/^-+/, "");
-  descricao = descricao.replace(/-/g, " ").trim();
+  descricao = removerAcentos(descricao).replace(/-/g, " ").replace(/\s+/g, " ").trim();
 
-  return descricao ? `${jira} ${descricao}` : jira;
+  return descricao ? `${chave} ${descricao}` : chave;
 }

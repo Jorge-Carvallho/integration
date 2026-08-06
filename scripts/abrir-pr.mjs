@@ -64,13 +64,24 @@ export function sincronizarPullRequest(branchParam) {
 
   const titulo = montarTituloPrSugerido(jira, branch);
 
+  if (/[^\x00-\x7F]/.test(branch)) {
+    console.log(
+      chalk.yellow(
+        "\nAviso: a branch tem acentos/caracteres especiais. Prefira ASCII no padrao da empresa:",
+      ),
+    );
+    console.log(chalk.cyan("  docs/SCRUM-3-organizacao-da-documentacao\n"));
+  }
+
   if (pullRequestDaBranchAtualExiste()) {
     execFileSync("gh", ["pr", "edit", "--title", titulo], { stdio: "inherit" });
     console.log(chalk.green(`\nTitulo do PR atualizado: ${titulo}`));
     return { titulo, acao: "atualizado" };
   }
 
-  execFileSync("gh", ["pr", "create", "--title", titulo, "--body", ""], { stdio: "inherit" });
+  execFileSync("gh", ["pr", "create", "--base", "main", "--title", titulo, "--body", ""], {
+    stdio: "inherit",
+  });
   console.log(chalk.green(`\nPull Request criado: ${titulo}`));
   return { titulo, acao: "criado" };
 }
