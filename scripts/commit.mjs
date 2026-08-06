@@ -15,11 +15,36 @@ const TIPOS = ["feat", "fix", "refactor", "docs", "test", "chore", "perf", "buil
 /** Limite do header (commitlint header-max-length). */
 const HEADER_MAX_LENGTH = 100;
 
+/** Limite do escopo (parte entre parenteses no titulo). */
+const ESCOPO_MAX_LENGTH = 30;
+
 /** Limite por linha do corpo (commitlint body-max-line-length). */
 const BODY_MAX_LINE_LENGTH = 100;
 
 /** Extrai a chave da branch (ex.: feature/SCRUM-1-descricao → SCRUM-1) */
 const JIRA_KEY_NA_BRANCH = /[A-Z]{2,10}-[0-9]+/i;
+
+/**
+ * Valida o escopo informado pelo desenvolvedor.
+ * @param {string} valor
+ * @returns {true | string}
+ */
+function validarEscopo(valor) {
+  const escopo = (valor ?? "").trim();
+
+  if (!escopo) {
+    return "Informe o escopo da mudanca";
+  }
+
+  if (escopo.length > ESCOPO_MAX_LENGTH) {
+    return [
+      `Escopo passou do tamanho permitido (${escopo.length}/${ESCOPO_MAX_LENGTH} caracteres).`,
+      "Diminua o escopo e informe novamente (ex: docs, setup, ci).",
+    ].join(" ");
+  }
+
+  return true;
+}
 
 /**
  * Monta a linha de titulo do commit (header).
@@ -197,8 +222,10 @@ async function main() {
     {
       type: "input",
       name: "escopo",
-      message: "Escopo (ex: checkout, auth):",
-      validate: (v) => v.trim().length > 0 || "Informe o escopo da mudanca",
+      message: `Escopo (ex: checkout, auth, max ${ESCOPO_MAX_LENGTH} caracteres):`,
+      validate: validarEscopo,
+      /** @param {string} v */
+      filter: (v) => (v ?? "").trim(),
     },
   ]);
 
