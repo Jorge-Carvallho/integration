@@ -28,6 +28,28 @@ const ESCOPO_MAX_LENGTH = 30;
 const BODY_MAX_LINE_LENGTH = 100;
 
 /**
+ * Garante um editor utilizavel para o campo de detalhes (DevContainer / local).
+ * Respeita VISUAL/EDITOR se ja existirem.
+ */
+function garantirEditorParaDetalhes() {
+  if (process.env.VISUAL || process.env.EDITOR) {
+    return;
+  }
+
+  for (const candidato of ["nano", "vi"]) {
+    try {
+      execFileSync("sh", ["-c", `command -v ${candidato}`], { stdio: "ignore" });
+      process.env.EDITOR = candidato;
+      return;
+    } catch {
+      // tenta o proximo
+    }
+  }
+
+  process.env.EDITOR = "vi";
+}
+
+/**
  * Valida o escopo informado pelo desenvolvedor.
  * @param {string} valor
  * @returns {true | string}
@@ -64,7 +86,8 @@ function montarHeader(tipo, escopo, jira, descricao, breaking = false) {
 }
 
 /**
- * Quebra o texto do corpo em linhas de no maximo maxLen caracteres.
+ * Quebra o texto do corpo em linhas de no maximo maxLen caracteres,
+ * preferindo espacos (nao corta palavra no meio).
  * @param {string} texto
  * @param {number} [maxLen]
  * @returns {string}
@@ -83,15 +106,7 @@ function quebrarLinhasDoCorpo(texto, maxLen = BODY_MAX_LINE_LENGTH) {
     let linhaAtual = "";
     for (const palavra of palavras) {
       if (!linhaAtual) {
-        // Palavra isolada maior que o limite: corta mesmo assim
-        if (palavra.length > maxLen) {
-          for (let i = 0; i < palavra.length; i += maxLen) {
-            linhas.push(palavra.slice(i, i + maxLen));
-          }
-          linhaAtual = "";
-        } else {
-          linhaAtual = palavra;
-        }
+        linhaAtual = palavra;
         continue;
       }
 
@@ -99,14 +114,7 @@ function quebrarLinhasDoCorpo(texto, maxLen = BODY_MAX_LINE_LENGTH) {
         linhaAtual = `${linhaAtual} ${palavra}`;
       } else {
         linhas.push(linhaAtual);
-        if (palavra.length > maxLen) {
-          for (let i = 0; i < palavra.length; i += maxLen) {
-            linhas.push(palavra.slice(i, i + maxLen));
-          }
-          linhaAtual = "";
-        } else {
-          linhaAtual = palavra;
-        }
+        linhaAtual = palavra;
       }
     }
 
@@ -116,6 +124,29 @@ function quebrarLinhasDoCorpo(texto, maxLen = BODY_MAX_LINE_LENGTH) {
   }
 
   return linhas.join("\n");
+}
+
+/**
+ * Garante que nenhuma "palavra" do corpo estoure o limite por linha do commitlint.
+ * @param {string} valor
+ * @returns {true | string}
+ */
+function validarDetalhes(valor) {
+  const texto = (valor ?? "").trim();
+  if (!texto) {
+    return true;
+  }
+
+  const palavrasLongas = texto.split(/\s+/).filter((p) => p.length > BODY_MAX_LINE_LENGTH);
+  if (palavrasLongas.length > 0) {
+    return [
+      `Uma sequencia sem espacos passou de ${BODY_MAX_LINE_LENGTH} caracteres.`,
+      "Separe o texto com espacos (nao cole um bloco continuo).",
+      "Assim a quebra de linha nao corta no meio e o commitlint aceita.",
+    ].join(" ");
+  }
+
+  return true;
 }
 
 /**
@@ -331,7 +362,7 @@ async function main() {
     },
   ]);
 
-  const respostas = await inquirer.prompt([
+  const { descricao, comDetalhes } = await inquirer.prompt([
     {
       type: "input",
       name: "descricao",
@@ -353,10 +384,36 @@ async function main() {
       },
     },
     {
-      type: "input",
-      name: "detalhes",
-      message: "Detalhes (opcional, Enter para pular):",
+      type: "confirm",
+      name: "comDetalhes",
+      message: "Adicionar detalhes (corpo do commit)?",
+      default: false,
     },
+  ]);
+
+  /** @type {string} */
+  let detalhesInformados = "";
+  if (comDetalhes) {
+    garantirEditorParaDetalhes();
+    console.log(
+      chalk.gray("\nAbrindo editor para os detalhes. Escreva a vontade (varias linhas)."),
+    );
+    console.log(
+      chalk.gray("Salve e feche o editor para continuar (nano: Ctrl+O, Enter, Ctrl+X).\n"),
+    );
+    const { detalhes } = await inquirer.prompt([
+      {
+        type: "editor",
+        name: "detalhes",
+        message: "Detalhes do commit",
+        default: "",
+        validate: validarDetalhes,
+      },
+    ]);
+    detalhesInformados = (detalhes ?? "").trim();
+  }
+
+  const respostas = await inquirer.prompt([
     {
       type: "confirm",
       name: "breaking",
@@ -380,13 +437,21 @@ async function main() {
         "\nCommit cancelado: lint ou typecheck falhou. Corrija os erros e rode 'pnpm commit' de novo.",
       ),
     );
-    console.log(chalk.yellow("Dica: rode 'pnpm typecheck' para ver os erros de tipagem."));
+    if (!temArquivosEmStaging()) {
+      console.log(
+        chalk.yellow(
+          "Dica: nao ha arquivos em staging. O Prettier pode ter desfeito so mudanca de espaco em branco.",
+        ),
+      );
+      console.log(chalk.yellow("Faca uma alteracao real, rode 'git add' e tente de novo."));
+    } else {
+      console.log(chalk.yellow("Dica: rode 'pnpm typecheck' para ver os erros de tipagem."));
+    }
     process.exit(1);
   }
 
-  const header = montarHeader(tipo, escopo, jira, respostas.descricao, respostas.breaking);
-  const detalhesBrutos = respostas.detalhes.trim();
-  const detalhes = detalhesBrutos ? quebrarLinhasDoCorpo(detalhesBrutos) : "";
+  const header = montarHeader(tipo, escopo, jira, descricao, respostas.breaking);
+  const detalhes = detalhesInformados ? quebrarLinhasDoCorpo(detalhesInformados) : "";
 
   console.log(chalk.yellow(`\nMensagem gerada:\n${header}`));
   if (detalhes) {
