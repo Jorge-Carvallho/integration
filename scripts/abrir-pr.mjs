@@ -29,12 +29,15 @@ function ghDisponivel() {
 }
 
 /**
+ * So considera PR aberto. PR fechado nao bloqueia criacao de um novo.
  * @returns {boolean}
  */
-function pullRequestDaBranchAtualExiste() {
+function pullRequestAbertoDaBranchAtualExiste() {
   try {
-    execFileSync("gh", ["pr", "view", "--json", "number"], { stdio: "ignore" });
-    return true;
+    const state = execFileSync("gh", ["pr", "view", "--json", "state", "--jq", ".state"], {
+      encoding: "utf8",
+    }).trim();
+    return state === "OPEN";
   } catch {
     return false;
   }
@@ -73,7 +76,7 @@ export function sincronizarPullRequest(branchParam) {
     console.log(chalk.cyan("  docs/SCRUM-3-organizacao-da-documentacao\n"));
   }
 
-  if (pullRequestDaBranchAtualExiste()) {
+  if (pullRequestAbertoDaBranchAtualExiste()) {
     execFileSync("gh", ["pr", "edit", "--title", titulo], { stdio: "inherit" });
     console.log(chalk.green(`\nTitulo do PR atualizado: ${titulo}`));
     return { titulo, acao: "atualizado" };
