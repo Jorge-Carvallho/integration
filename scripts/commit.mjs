@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import inquirer from "inquirer";
 import chalk from "chalk";
+import { extrairJiraKeyDaBranch, montarTituloPrSugerido } from "./git-jira-utils.mjs";
 
 /** Branch principal usada no link de abertura de PR (fallback: main). */
 const BRANCH_PRINCIPAL_PADRAO = "main";
@@ -25,9 +26,6 @@ const ESCOPO_MAX_LENGTH = 30;
 
 /** Limite por linha do corpo (commitlint body-max-line-length). */
 const BODY_MAX_LINE_LENGTH = 100;
-
-/** Extrai a chave da branch (ex.: feature/SCRUM-1-descricao → SCRUM-1) */
-const JIRA_KEY_NA_BRANCH = /[A-Z]{2,10}-[0-9]+/i;
 
 /**
  * Valida o escopo informado pelo desenvolvedor.
@@ -125,15 +123,6 @@ function quebrarLinhasDoCorpo(texto, maxLen = BODY_MAX_LINE_LENGTH) {
  */
 function obterBranchAtual() {
   return execFileSync("git", ["branch", "--show-current"], { encoding: "utf8" }).trim();
-}
-
-/**
- * @param {string} branch
- * @returns {string | null}
- */
-function extrairJiraKeyDaBranch(branch) {
-  const match = branch.match(JIRA_KEY_NA_BRANCH);
-  return match ? match[0].toUpperCase() : null;
 }
 
 /**
@@ -268,6 +257,8 @@ function obterUrlIssueJira(jira) {
  * @param {string} branch
  */
 function mostrarLinksAposPush(jira, branch) {
+  const tituloPr = montarTituloPrSugerido(jira, branch);
+
   console.log(chalk.cyan("\nLinks uteis (clique para abrir no navegador):"));
 
   const urlIssue = obterUrlIssueJira(jira);
@@ -289,12 +280,15 @@ function mostrarLinksAposPush(jira, branch) {
     const branchCodificada = encodeURIComponent(branch);
     const base = obterBranchPrincipal();
     const baseCodificada = encodeURIComponent(base);
+    const tituloCodificado = encodeURIComponent(tituloPr);
 
     console.log(chalk.gray("\nBranch no GitHub:"));
     console.log(`${repo}/tree/${branchCodificada}`);
 
-    console.log(chalk.gray("\nAbrir Pull Request:"));
-    console.log(`${repo}/compare/${baseCodificada}...${branchCodificada}?expand=1`);
+    console.log(chalk.gray("\nAbrir Pull Request (titulo padrao ja preenchido):"));
+    console.log(
+      `${repo}/compare/${baseCodificada}...${branchCodificada}?expand=1&title=${tituloCodificado}`,
+    );
   } catch {
     console.log(chalk.gray("\nBranch no GitHub: nao foi possivel montar o link."));
   }
