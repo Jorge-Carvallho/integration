@@ -154,14 +154,16 @@ Além da validação de commits, futuramente esses workflows poderão executar:
 
 # Papel de cada ferramenta
 
-| Ferramenta                   | Função                                                                            |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| **package.json**             | Diz quais comandos existem e quais ferramentas o projeto utiliza.                 |
-| **commit.mjs**               | Executa a lógica personalizada criada pela empresa para o processo de commit.     |
-| **.husky/commit-msg**        | Informa ao Git que, durante um commit, uma validação deve ser executada.          |
-| **commitlint.config.js**     | Define as regras que o Commitlint utilizará para validar a mensagem do commit.    |
-| **lint-staged**              | Executa verificações apenas nos arquivos modificados, tornando o processo rápido. |
-| **.github/workflows/\*.yml** | Executa novamente as validações no GitHub e faz parte do pipeline de CI.          |
+| Ferramenta                        | Função                                                                            |
+| --------------------------------- | --------------------------------------------------------------------------------- |
+| **package.json**                  | Diz quais comandos existem e quais ferramentas o projeto utiliza.                 |
+| **commit.mjs**                    | Executa a lógica personalizada criada pela empresa para o processo de commit.     |
+| **proteger-branch-principal.mjs** | Aplica proteção da branch principal (`main`/`master`) via GitHub CLI (`gh`).      |
+| **.husky/commit-msg**             | Informa ao Git que, durante um commit, uma validação deve ser executada.          |
+| **commitlint.config.js**          | Define as regras que o Commitlint utilizará para validar a mensagem do commit.    |
+| **lint-staged**                   | Executa verificações apenas nos arquivos modificados, tornando o processo rápido. |
+| **.github/workflows/\*.yml**      | Executa novamente as validações no GitHub e faz parte do pipeline de CI.          |
+| **GitHub CLI (`gh`)**             | Dependência externa para `pnpm proteger-branch` (não vem do `package.json`).      |
 
 ---
 
@@ -213,3 +215,46 @@ Cada ferramenta possui uma responsabilidade específica:
 - **commit.mjs** executa regras personalizadas da empresa.
 - **package.json** organiza dependências e comandos.
 - **GitHub Actions** realiza novamente todas as validações no servidor, garantindo que apenas código dentro dos padrões seja aceito.
+
+---
+
+# Dependências da base (para documentação e DevContainer)
+
+Usar esta lista ao escrever a documentação oficial e ao montar o DevContainer.
+
+## Runtime / ferramentas de sistema
+
+| Dependência           | Para quê                                                    | Obrigatória?                                         |
+| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
+| **Node.js** (LTS)     | Rodar scripts (`pnpm commit`, typecheck, etc.)              | Sim                                                  |
+| **pnpm**              | Instalar pacotes e executar scripts do `package.json`       | Sim                                                  |
+| **Git**               | Branch, commit, push                                        | Sim                                                  |
+| **GitHub CLI (`gh`)** | Script `pnpm proteger-branch` (proteção de `main`/`master`) | Só para quem for aplicar proteção de branch (DevOps) |
+
+> Atenção: `gh` **não** é dependência npm. Precisa estar instalado no sistema (ou no DevContainer) e autenticado (`gh auth login`).
+
+## Dependências npm (`package.json` / `devDependencies`)
+
+| Pacote                                                | Para quê                                                |
+| ----------------------------------------------------- | ------------------------------------------------------- |
+| `husky`                                               | Hooks Git (pre-commit, commit-msg)                      |
+| `lint-staged`                                         | Lint/format só nos arquivos do commit                   |
+| `@commitlint/cli` + `@commitlint/config-conventional` | Validar mensagem de commit                              |
+| `inquirer` + `chalk`                                  | Script interativo `pnpm commit` (e mensagens coloridas) |
+| `eslint` + `prettier`                                 | Qualidade e formatação                                  |
+| `typescript` + `@types/node`                          | Typecheck (`pnpm typecheck`)                            |
+
+## Comandos da base
+
+| Comando                | Script                                  |
+| ---------------------- | --------------------------------------- |
+| `pnpm commit`          | `scripts/commit.mjs`                    |
+| `pnpm proteger-branch` | `scripts/proteger-branch-principal.mjs` |
+| `pnpm typecheck`       | `tsc --noEmit`                          |
+
+## Notas para o DevContainer (futuro)
+
+- Incluir Node + pnpm + Git no container.
+- Incluir `gh` se o ambiente DevOps for aplicar proteção de branch de dentro do container.
+- Documentar `gh auth login` (token/escopos: `repo`, `admin:repo_hook`, `workflow`).
+- Branch protection exige plano GitHub adequado (repo público, Pro ou Organization). Repo privado em conta free retorna 403.
