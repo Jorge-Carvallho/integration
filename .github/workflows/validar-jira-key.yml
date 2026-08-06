@@ -12,6 +12,9 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, edited]
 
+permissions:
+  contents: read
+
 jobs:
   validar-jira-key:
     name: Validar commits e PR
@@ -43,6 +46,8 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           PATTERN="[A-Z]{2,10}-[0-9]+"
+          # Excecoes documentadas (PDF secao 11): merges automaticos e bots
+          IGNORAR="^Merge (branch|pull request|remote-tracking)|^Revert |^chore\(deps(-dev)?\): bump "
           FALHOU=0
 
           echo "Comparando commits: $BASE_SHA .. $HEAD_SHA"
@@ -50,6 +55,10 @@ jobs:
 
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
+            if echo "$msg" | grep -qE "$IGNORAR"; then
+              echo "IGNORADO (excecao documentada): $msg"
+              continue
+            fi
             if ! echo "$msg" | grep -qE "$PATTERN"; then
               echo "Commit sem jira key valida: $msg"
               echo "  Formato esperado: PREFIXO-NUMERO (ex: INT-009, MBX-123)"
